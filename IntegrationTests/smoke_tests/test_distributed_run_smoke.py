@@ -1,39 +1,19 @@
 import json
-import os
-from xml.etree import ElementTree
 
-from IntegrationTests.helpers.fixture_types.AvitoRunnerArgs import AvitoRunnerArgs
-from IntegrationTests.helpers.fixture_types.EmceePluginFixture import EmceePluginFixture
-from IntegrationTests.helpers.fixture_types.IosAppFixture import IosAppFixture
+from IntegrationTests.helpers.fixture_types.EmceeRunTestsArgs import EmceeRunTestsArgs
 from IntegrationTests.helpers.common_fixtures import *
-
-def check_file_exists(path):
-    if not os.path.exists(path):
-        raise AssertionError("Expected to have file at: {path}".format(path=path))
+from IntegrationTests.helpers.miscellaneous import check_file_exists, get_test_cases_from_xml_file
+from IntegrationTests.smoke_tests.smoke_tests_fixtures import *
 
 
-def get_test_cases_from_xml_file(path):
-    tree = ElementTree.parse(path)
-    root = tree.getroot()
-    cases = []
-    for case in root.findall('.//testcase'):
-        if not case.findall('skipped'):
-            case_dict = case.attrib.copy()
-            if len(case):
-                for child in case:
-                    print("child: " + str(child))
-                    case_dict[child.tag] = child.attrib.copy()
-            cases.append(case_dict)
-    return cases
-
-class TestSmokeTests:
-    def test_check_reports_exist(self, smoke_tests_result: AvitoRunnerArgs):
+class TestDistributedRunSmoke:
+    def test_check_reports_exist(self, smoke_tests_result: EmceeRunTestsArgs):
         check_file_exists(smoke_tests_result.current_directory.sub_path('auxiliary/tempfolder/test-results/iphone_se_ios_103.json'))
         check_file_exists(smoke_tests_result.current_directory.sub_path('auxiliary/tempfolder/test-results/iphone_se_ios_103.xml'))
         check_file_exists(smoke_tests_result.trace_path)
         check_file_exists(smoke_tests_result.junit_path)
 
-    def test_junit_contents(self, repo_root: Directory, smoke_tests_result: AvitoRunnerArgs):
+    def test_junit_contents(self, repo_root: Directory, smoke_tests_result: EmceeRunTestsArgs):
         iphone_se_junit = get_test_cases_from_xml_file(
             path=smoke_tests_result.current_directory.sub_path('auxiliary/tempfolder/test-results/iphone_se_ios_103.xml')
         )
@@ -55,7 +35,7 @@ class TestSmokeTests:
         assert successful_tests == expected_successful_tests
         assert failed_tests == expected_failed_tests
 
-    def test_plugin_output(self, repo_root: Directory, smoke_tests_result: AvitoRunnerArgs):
+    def test_plugin_output(self, repo_root: Directory, smoke_tests_result: EmceeRunTestsArgs):
         output_path = open(smoke_tests_result.current_directory.sub_path('auxiliary/tempfolder/test-results/test_plugin_output.json'), 'r')
         json_contents = json.load(output_path)
 
@@ -199,7 +179,7 @@ def smoke_tests_result(
         test_results_directory = temporary_directory.make_sub_directory("test_results")
         current_directory = temporary_directory.make_sub_directory("current_directory")
 
-        args = AvitoRunnerArgs(
+        args = EmceeRunTestsArgs(
             avito_runner=avito_runner,
             ios_app=smoke_tests_app,
             environment_json=repo_root.sub_path('auxiliary/environment.json'),
@@ -224,60 +204,5 @@ def smoke_tests_result(
     yield from using_pycache(
         request=request,
         key="smoke_tests_result",
-        make=make
-    )
-
-@pytest.fixture(scope="session")
-def smoke_tests_app(request, repo_root):
-    def make():
-        temporary_directory: Directory = Directory.make_temporary(remove_automatically=False)
-        derived_data: Directory = temporary_directory.make_sub_directory(path="DerivedData")
-        xcodebuild_log_path: str = derived_data.sub_path('xcodebuild.log.ignored')
-
-        print(f'Building for testing. Build is log path: {xcodebuild_log_path}')
-
-        bash(command=f'''
-        set -o pipefail && \
-        cd "{repo_root.path}/TestApp" && xcodebuild build-for-testing \
-        -scheme "TestApp" \
-        -derivedDataPath {derived_data.path} \
-        -destination "platform=iOS Simulator,name=iPhone SE,OS=10.3.1" \
-        | tee "{xcodebuild_log_path}" || (echo "Failed! Logs: `cat {xcodebuild_log_path}`" && exit 3)
-        ''')
-
-        # Work around a bug when xcodebuild puts Build and Indexes folders to a pwd instead of derived data
-        def derived_data_workaround(top_level_folder: str):
-            build_folder = '{repo_root.path}/TestApp/{top_level_folder}'
-            if os.path.isdir(build_folder):
-                print(f'Unexpectidly found {top_level_folder} in PWD, moving {repo_root.path}/TestApp/{top_level_folder}/ to {derived_data.path}/')
-                os.rename(build_folder, f'{derived_data.path}/{top_level_folder}')
-
-        derived_data_workaround(top_level_folder='Build')
-        derived_data_workaround(top_level_folder='Index')
-
-        yield IosAppFixture(
-            app_path=f'{derived_data.path}/Build/Products/Debug-iphonesimulator/TestApp.app',
-            ui_tests_runner_path=f'{derived_data.path}/Build/Products/Debug-iphonesimulator/TestAppUITests-Runner.app',
-            xctest_bundle_path=f'{derived_data.path}/Build/Products/Debug-iphonesimulator/TestAppUITests-Runner.app/PlugIns/TestAppUITests.xctest'
-        )
-
-    yield from using_pycache(
-        request=request,
-        key="smoke_tests_app",
-        make=make
-    )
-
-@pytest.fixture(scope="session")
-def smoke_tests_plugin(request, repo_root):
-    def make():
-        bash(command='make build', current_directory=f'{repo_root.path}/TestPlugin')
-
-        yield EmceePluginFixture(
-            path=f'{repo_root.path}/TestPlugin/.build/debug/TestPlugin.emceeplugin'
-        )
-
-    yield from using_pycache(
-        request=request,
-        key="smoke_tests_plugin",
         make=make
     )
