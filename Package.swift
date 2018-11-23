@@ -169,6 +169,7 @@ let package = Package(
             name: "EventBusTests",
             dependencies: [
                 "EventBus",
+                "ModelsTestHelpers",
                 "SynchronousWaiter"
             ]),
         
