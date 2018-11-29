@@ -82,8 +82,12 @@ public struct DistRunConfiguration {
     
     private func testExecutionBehavior(destination: DeploymentDestination) -> TestExecutionBehavior {
         let overrides = destinationConfigurations.first { $0.destinationIdentifier == destination.identifier }
+        
+        // Queue server will retry by itself
+        let numberOfRetriesOnLocalMachine: UInt = 0
+        
         return TestExecutionBehavior(
-            numberOfRetries: testExecutionBehavior.numberOfRetries,
+            numberOfRetries: numberOfRetriesOnLocalMachine,
             numberOfSimulators: overrides?.numberOfSimulators ?? testExecutionBehavior.numberOfSimulators,
             environment: testExecutionBehavior.environment,
             scheduleStrategy: testExecutionBehavior.scheduleStrategy)
