@@ -65,7 +65,9 @@ final class RuntimeTestQuerierTests: XCTestCase {
             eventBus: eventBus,
             configuration: runtimeDumpConfiguration(testsToRun: testsToRun),
             resourceLocationResolver: resourceLocationResolver,
-            tempFolder: tempFolder)
+            tempFolder: tempFolder,
+            runtimeEntriesJSONPath: tempFolder.pathWith(components: [RuntimeTestQuerier.runtimeTestsJsonFilename]).asString
+        )
     }
     
     private func runtimeDumpConfiguration(testsToRun: [TestToRun]) -> RuntimeDumpConfiguration {
